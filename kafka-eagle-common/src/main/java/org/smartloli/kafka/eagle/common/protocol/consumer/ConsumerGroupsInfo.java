@@ -15,17 +15,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.smartloli.kafka.eagle.api.email;
+package org.smartloli.kafka.eagle.common.protocol.consumer;
+
+import org.smartloli.kafka.eagle.common.protocol.BaseProtocol;
 
 /**
- * Mail send message interface.
+ * Stats consumer groups and topic.
  * 
  * @author smartloli.
  *
- *         Created by Jan 17, 2017
+ *         Created by Mar 17, 2020
  */
-public interface MailService {
+public class ConsumerGroupsInfo extends BaseProtocol {
+	private String cluster;
+	private String group;
+	private String topic;
+	private int status;// running, pending, shutdown
 
-	public boolean send(String subject, String address, String content, String attachment);
+	public int getStatus() {
+		return status;
+	}
+
+	public void setStatus(int status) {
+		this.status = status;
+	}
+
+	public String getCluster() {
+		return cluster;
+	}
+
+	public void setCluster(String cluster) {
+		this.cluster = cluster;
+	}
+
+	public String getGroup() {
+		return group;
+	}
+
+	public void setGroup(String group) {
+		this.group = group;
+	}
+
+	public String getTopic() {
+		return topic;
+	}
+
+	public void setTopic(String topic) {
+		this.topic = topic;
+	}
 
 }

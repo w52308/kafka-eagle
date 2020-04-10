@@ -169,8 +169,10 @@ public class DashboardServiceImpl implements DashboardService {
 	public int writeTopicRank(List<TopicRank> topicRanks) {
 		return topicDao.writeTopicRank(topicRanks);
 	}
-	
-	/** Write statistics topic logsize data from kafka jmx & insert into table. */
+
+	/**
+	 * Write statistics topic logsize data from kafka jmx & insert into table.
+	 */
 	public int writeTopicLogSize(List<TopicLogSize> topicLogSize) {
 		return topicDao.writeTopicLogSize(topicLogSize);
 	}
@@ -196,6 +198,11 @@ public class DashboardServiceImpl implements DashboardService {
 	/** Read topic lastest logsize diffval data. */
 	public TopicLogSize readLastTopicLogSize(Map<String, Object> params) {
 		return topicDao.readLastTopicLogSize(params);
+	}
+
+	/** Get all clean topic list. */
+	public List<TopicRank> getCleanTopicList(Map<String, Object> params) {
+		return topicDao.getCleanTopicList(params);
 	}
 
 }

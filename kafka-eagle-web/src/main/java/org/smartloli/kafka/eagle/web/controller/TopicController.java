@@ -35,6 +35,8 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.smartloli.kafka.eagle.common.protocol.MetadataInfo;
 import org.smartloli.kafka.eagle.common.protocol.PartitionsInfo;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicConfig;
+import org.smartloli.kafka.eagle.common.protocol.topic.TopicMockMessage;
+import org.smartloli.kafka.eagle.common.protocol.topic.TopicRank;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicSqlHistory;
 import org.smartloli.kafka.eagle.common.util.CalendarUtils;
 import org.smartloli.kafka.eagle.common.util.KConstants;
@@ -44,11 +46,14 @@ import org.smartloli.kafka.eagle.common.util.KConstants.Topic;
 import org.smartloli.kafka.eagle.common.util.SystemConfigUtils;
 import org.smartloli.kafka.eagle.core.factory.KafkaFactory;
 import org.smartloli.kafka.eagle.core.factory.KafkaService;
+import org.smartloli.kafka.eagle.core.factory.v2.BrokerFactory;
+import org.smartloli.kafka.eagle.core.factory.v2.BrokerService;
 import org.smartloli.kafka.eagle.web.pojo.Signiner;
 import org.smartloli.kafka.eagle.web.service.TopicService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,6 +82,9 @@ public class TopicController {
 
 	/** Kafka service interface. */
 	private KafkaService kafkaService = new KafkaFactory().create();
+
+	/** BrokerService interface. */
+	private BrokerService brokerService = new BrokerFactory().create();
 
 	/** Topic create viewer. */
 	@RequiresPermissions("/topic/create")
@@ -187,6 +195,16 @@ public class TopicController {
 			object.put("leader", metadata.getLeader());
 			object.put("replicas", metadata.getReplicas());
 			object.put("isr", metadata.getIsr());
+			if (metadata.isPreferredLeader()) {
+				object.put("preferred_leader", "<a class='btn btn-success btn-xs'>true</a>");
+			} else {
+				object.put("preferred_leader", "<a class='btn btn-danger btn-xs'>false</a>");
+			}
+			if (metadata.isUnderReplicated()) {
+				object.put("under_replicated", "<a class='btn btn-danger btn-xs'>true</a>");
+			} else {
+				object.put("under_replicated", "<a class='btn btn-success btn-xs'>false</a>");
+			}
 			aaDatas.add(object);
 		}
 
@@ -292,14 +310,14 @@ public class TopicController {
 		}
 	}
 
-	/***/
-	@RequestMapping(value = "/topic/mock/send/message/{topic}/ajax", method = RequestMethod.GET)
-	public void topicMockSend(@PathVariable("topic") String topic, @RequestParam("message") String message, HttpServletResponse response, HttpServletRequest request) {
+	/** Send mock data to topic. */
+	@RequestMapping(value = "/topic/mock/send/message/topic/ajax", method = RequestMethod.POST)
+	public void topicMockSend(@RequestBody TopicMockMessage topicMockMessage, HttpServletResponse response, HttpServletRequest request) {
 		try {
 			HttpSession session = request.getSession();
 			String clusterAlias = session.getAttribute(KConstants.SessionAlias.CLUSTER_ALIAS).toString();
 			JSONObject object = new JSONObject();
-			object.put("status", topicService.mockSendMsg(clusterAlias, topic, message));
+			object.put("status", topicService.mockSendMsg(clusterAlias, topicMockMessage.getTopic(), topicMockMessage.getMessage()));
 			byte[] output = object.toJSONString().getBytes();
 			BaseController.response(output, response);
 		} catch (Exception ex) {
@@ -347,23 +365,75 @@ public class TopicController {
 			JSONObject object = new JSONObject();
 			object.put("id", partition.getId());
 			object.put("topic", "<a href='/ke/topic/meta/" + partition.getTopic() + "/' target='_blank'>" + partition.getTopic() + "</a>");
-			object.put("partitions", partition.getPartitions().size() > Topic.PARTITION_LENGTH ? partition.getPartitions().toString().substring(0, Topic.PARTITION_LENGTH) + "..." : partition.getPartitions().toString());
-			object.put("partitionNumbers", partition.getPartitionNumbers());
+			object.put("partitions", partition.getPartitionNumbers());
+			try {
+				long brokerSpread = partition.getBrokersSpread();
+				if (brokerSpread < Topic.TOPIC_BROKER_SPREAD_ERROR) {
+					object.put("brokerSpread", "<a class='btn btn-danger btn-xs'>" + brokerSpread + "%</a>");
+				} else if (brokerSpread >= Topic.TOPIC_BROKER_SPREAD_ERROR && brokerSpread < Topic.TOPIC_BROKER_SPREAD_NORMAL) {
+					object.put("brokerSpread", "<a class='btn btn-warning btn-xs'>" + brokerSpread + "%</a>");
+				} else if (brokerSpread >= Topic.TOPIC_BROKER_SPREAD_NORMAL) {
+					object.put("brokerSpread", "<a class='btn btn-success btn-xs'>" + brokerSpread + "%</a>");
+				} else {
+					object.put("brokerSpread", "<a class='btn btn-primary btn-xs'>" + brokerSpread + "%</a>");
+				}
+
+				long brokerSkewed = partition.getBrokersSkewed();
+				if (brokerSkewed >= Topic.TOPIC_BROKER_SKEW_ERROR) {
+					object.put("brokerSkewed", "<a class='btn btn-danger btn-xs'>" + brokerSkewed + "%</a>");
+				} else if (brokerSkewed > Topic.TOPIC_BROKER_SKEW_NORMAL && brokerSkewed < Topic.TOPIC_BROKER_SKEW_ERROR) {
+					object.put("brokerSkewed", "<a class='btn btn-warning btn-xs'>" + brokerSkewed + "%</a>");
+				} else if (brokerSkewed <= Topic.TOPIC_BROKER_SKEW_NORMAL) {
+					object.put("brokerSkewed", "<a class='btn btn-success btn-xs'>" + brokerSkewed + "%</a>");
+				} else {
+					object.put("brokerSkewed", "<a class='btn btn-primary btn-xs'>" + brokerSkewed + "%</a>");
+				}
+
+				long brokerLeaderSkewed = partition.getBrokersLeaderSkewed();
+				if (brokerLeaderSkewed >= Topic.TOPIC_BROKER_LEADER_SKEW_ERROR) {
+					object.put("brokerLeaderSkewed", "<a class='btn btn-danger btn-xs'>" + brokerLeaderSkewed + "%</a>");
+				} else if (brokerSkewed > Topic.TOPIC_BROKER_LEADER_SKEW_NORMAL && brokerLeaderSkewed < Topic.TOPIC_BROKER_LEADER_SKEW_ERROR) {
+					object.put("brokerLeaderSkewed", "<a class='btn btn-warning btn-xs'>" + brokerLeaderSkewed + "%</a>");
+				} else if (brokerSkewed <= Topic.TOPIC_BROKER_LEADER_SKEW_NORMAL) {
+					object.put("brokerLeaderSkewed", "<a class='btn btn-success btn-xs'>" + brokerLeaderSkewed + "%</a>");
+				} else {
+					object.put("brokerLeaderSkewed", "<a class='btn btn-primary btn-xs'>" + brokerLeaderSkewed + "%</a>");
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 			object.put("created", partition.getCreated());
 			object.put("modify", partition.getModify());
-			if (Role.ADMIN.equals(signiner.getUsername())) {
-				object.put("operate",
-						"<div class='btn-group'><button class='btn btn-primary btn-xs dropdown-toggle' type='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Action <span class='caret'></span></button><ul class='dropdown-menu dropdown-menu-right'><li><a name='topic_modify' href='#"
-								+ partition.getTopic() + "'><i class='fa fa-fw fa-edit'></i>Modify</a></li><li><a href='#" + partition.getTopic() + "' name='topic_clean'><i class='fa fa-fw fa-trash-o'></i>Clean</a></li><li><a href='#"
-								+ partition.getTopic() + "' name='topic_remove'><i class='fa fa-fw fa-minus-circle'></i>Remove</a></li></ul></div>");
+			Map<String, Object> topicStateParams = new HashMap<>();
+			topicStateParams.put("cluster", clusterAlias);
+			topicStateParams.put("topic", partition.getTopic());
+			topicStateParams.put("tkey", Topic.TRUNCATE);
+			List<TopicRank> topicStates = topicService.getCleanTopicState(topicStateParams);
+			if (topicStates != null && topicStates.size() > 0) {
+				if (topicStates.get(0).getTvalue() == 0) {
+					if (Role.ADMIN.equals(signiner.getUsername())) {
+						object.put("operate", "<div class='btn-group'><button class='btn btn-primary btn-xs dropdown-toggle' type='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Action <span class='caret'></span></button><ul class='dropdown-menu dropdown-menu-right'><li><a name='topic_modify' href='#" + partition.getTopic()
+								+ "'><i class='fa fa-fw fa-edit'></i>Alter</a></li><li><a href='#" + partition.getTopic() + "' name='topic_remove'><i class='fa fa-fw fa-minus-circle'></i>Drop</a></li><li><a href='#" + partition.getTopic() + "' name=''><i class='fa fa-fw fa-trash-o'></i>Truncating</a></li></ul></div>");
+					} else {
+						object.put("operate", "");
+					}
+				} else {
+					if (Role.ADMIN.equals(signiner.getUsername())) {
+						object.put("operate", "<div class='btn-group'><button class='btn btn-primary btn-xs dropdown-toggle' type='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Action <span class='caret'></span></button><ul class='dropdown-menu dropdown-menu-right'><li><a name='topic_modify' href='#" + partition.getTopic()
+								+ "'><i class='fa fa-fw fa-edit'></i>Alter</a></li><li><a href='#" + partition.getTopic() + "' name='topic_remove'><i class='fa fa-fw fa-minus-circle'></i>Drop</a></li><li><a href='#" + partition.getTopic() + "' name='topic_clean'><i class='fa fa-fw fa-trash-o'></i>Truncated</a></li></ul></div>");
+					} else {
+						object.put("operate", "");
+					}
+				}
 			} else {
-				object.put("operate", "");
+				if (Role.ADMIN.equals(signiner.getUsername())) {
+					object.put("operate", "<div class='btn-group'><button class='btn btn-primary btn-xs dropdown-toggle' type='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Action <span class='caret'></span></button><ul class='dropdown-menu dropdown-menu-right'><li><a name='topic_modify' href='#" + partition.getTopic()
+							+ "'><i class='fa fa-fw fa-edit'></i>Alter</a></li><li><a href='#" + partition.getTopic() + "' name='topic_remove'><i class='fa fa-fw fa-minus-circle'></i>Drop</a></li><li><a href='#" + partition.getTopic() + "' name='topic_clean'><i class='fa fa-fw fa-trash-o'></i>Truncate</a></li></ul></div>");
+				} else {
+					object.put("operate", "");
+				}
 			}
-//			if (Kafka.CONSUMER_OFFSET_TOPIC.equals(partition.getTopic())) {
-//				object.put("operate", "");
-//			} else {
-//				object.put("operate", "<a name='remove' href='#" + partition.getTopic() + "' class='btn btn-danger btn-xs'>Remove</a>");
-//			}
+
 			aaDatas.add(object);
 		}
 
@@ -424,6 +494,31 @@ public class TopicController {
 		}
 	}
 
+	/** Clean topic data by ajax. */
+	@RequestMapping(value = "/topic/clean/data/{topic}/", method = RequestMethod.GET)
+	public ModelAndView cleanTopicDataAjax(@PathVariable("topic") String topic, HttpServletResponse response, HttpServletRequest request) {
+		ModelAndView mav = new ModelAndView();
+		try {
+			HttpSession session = request.getSession();
+			String clusterAlias = session.getAttribute(KConstants.SessionAlias.CLUSTER_ALIAS).toString();
+
+			TopicRank tr = new TopicRank();
+			tr.setCluster(clusterAlias);
+			tr.setTopic(topic);
+			tr.setTkey(Topic.TRUNCATE);
+			tr.setTvalue(0);
+			if (topicService.addCleanTopicData(Arrays.asList(tr)) > 0) {
+				mav.setViewName("redirect:/topic/list");
+			} else {
+				mav.setViewName("redirect:/errors/500");
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			mav.setViewName("redirect:/errors/500");
+		}
+		return mav;
+	}
+
 	/** Create topic form. */
 	@RequestMapping(value = "/topic/create/form", method = RequestMethod.POST)
 	public ModelAndView topicAddForm(HttpSession session, HttpServletResponse response, HttpServletRequest request) {
@@ -458,6 +553,20 @@ public class TopicController {
 				mav.setViewName("redirect:/errors/500");
 			}
 		} else {
+			mav.setViewName("redirect:/errors/403");
+		}
+		return mav;
+	}
+
+	/** Modify topic partitions. */
+	@RequestMapping(value = "/topic/{topicName}/{partitions}/modify", method = RequestMethod.GET)
+	public ModelAndView topicModifyPartitions(@PathVariable("topicName") String topicName, @PathVariable("partitions") int token, HttpSession session, HttpServletResponse response, HttpServletRequest request) {
+		ModelAndView mav = new ModelAndView();
+		String clusterAlias = session.getAttribute(KConstants.SessionAlias.CLUSTER_ALIAS).toString();
+		Map<String, Object> respons = brokerService.createTopicPartitions(clusterAlias, topicName, token);
+		if ("success".equals(respons.get("status"))) {
+			mav.setViewName("redirect:/topic/list");
+		} else {
 			mav.setViewName("redirect:/errors/500");
 		}
 		return mav;
@@ -474,7 +583,7 @@ public class TopicController {
 			try {
 				topicSql.setCluster(clusterAlias);
 				topicSql.setCreated(CalendarUtils.getDate());
-				topicSql.setHost(request.getRemoteAddr());
+				topicSql.setHost(request.getRemoteHost());
 				topicSql.setKsql(sql);
 				if (result.getBoolean("error")) {
 					topicSql.setStatus("FAILED");

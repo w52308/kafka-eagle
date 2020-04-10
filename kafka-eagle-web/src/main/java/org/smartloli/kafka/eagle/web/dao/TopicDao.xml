@@ -48,11 +48,50 @@
 		<result property="tm" column="tm" />
 	</resultMap>
 
+	<resultMap type="org.smartloli.kafka.eagle.common.protocol.consumer.ConsumerGroupsInfo" id="cgi">
+		<result property="cluster" column="cluster" />
+		<result property="group" column="group" />
+		<result property="topic" column="topic" />
+		<result property="status" column="status" />
+	</resultMap>
+
+	<resultMap type="org.smartloli.kafka.eagle.common.protocol.consumer.ConsumerSummaryInfo" id="csi">
+		<result property="cluster" column="cluster" />
+		<result property="group" column="group" />
+		<result property="topicNumbers" column="topic_number" />
+		<result property="coordinator" column="coordinator" />
+		<result property="activeTopic" column="active_topic" />
+		<result property="activeThread" column="active_thread_total" />
+	</resultMap>
+
 	<!-- TopicRank -->
 	<select id="readTopicRank" parameterType="map" resultMap="trank">
 		select `topic`,`tvalue` from ke_topic_rank
-		where `cluster` =#{cluster} and `tkey`=#{tkey}
+		where `cluster`=#{cluster} and `tkey`=#{tkey}
 		order by `tvalue` desc limit 10
+	</select>
+
+	<!-- Get clean topic state -->
+	<select id="getCleanTopicState" parameterType="map" resultMap="trank">
+		select `tvalue` from ke_topic_rank
+		where `cluster`=#{cluster} and `topic`=#{topic} and `tkey`=#{tkey}
+	</select>
+
+	<!-- Get all clean topic list -->
+	<select id="getCleanTopicList" parameterType="map" resultMap="trank">
+		select `cluster`,`topic`,`tkey` from ke_topic_rank
+		where `cluster`=#{cluster} and `tkey`='truncate' and `tvalue`=0
+	</select>
+
+	<!-- Topic broker spread, skew, leader skewed -->
+	<select id="readBrokerPerformance" parameterType="map" resultMap="trank">
+		select `topic`,`tvalue` from ke_topic_rank where cluster=#{cluster} and `topic`=#{topic} and `tkey`=#{tkey}
+	</select>
+
+	<!-- TopicCapacity -->
+	<select id="getTopicCapacity" parameterType="map" resultType="long">
+		select sum(`tvalue`) from ke_topic_rank
+		where `cluster` =#{cluster} and `tkey`=#{tkey}
 	</select>
 
 	<insert id="writeTopicRank" parameterType="java.util.List">
@@ -86,9 +125,16 @@
 		and tm between #{stime} and #{etime}
 	</select>
 
+	<select id="queryTopicProducerByAlarm" parameterType="map" resultMap="tlogsize">
+		select `cluster`,`topic`,`logsize`,`diffval`,`timespan` from ke_logsize
+		where `cluster`=#{cluster} and `topic`=#{topic}
+		and tm=#{stime} order by `timespan` desc
+		limit 1
+	</select>
+
 	<select id="queryProducerHistoryBar" parameterType="map" resultMap="bsbar">
 		select tm,sum(diffval) as total from ke_logsize where cluster=#{cluster}
-		<if test="topics != '' and topics != null">
+		<if test="topics != null and topics.size > 0">
 			and `topic` in (
 			<foreach collection="topics" item="item" index="index" separator=",">
 				#{item}
@@ -107,7 +153,7 @@
 				and `id`=#{search}
 			</if>
 		</where>
-		limit #{start},#{size}
+		order by created desc limit #{start},#{size}
 	</select>
 
 	<select id="readTopicSqlHistoryByAdmin" parameterType="map" resultMap="tsql">
@@ -118,7 +164,7 @@
 				and (`id`=#{search} or `username`=#{search} or `host`=#{search})
 			</if>
 		</where>
-		limit #{start},#{size}
+		order by created desc limit #{start},#{size}
 	</select>
 
 	<select id="findTopicSqlByID" parameterType="map" resultMap="tsql">
@@ -174,7 +220,7 @@
 	<select id="getBScreenTotalRecords" parameterType="map" resultType="long">
 		select ifnull(sum(a.logsize),0) from (select `logsize` from ke_logsize
 		where `cluster`=#{cluster}
-		<if test="topics != '' and topics != null">
+		<if test="topics != null and topics.size > 0">
 			and `topic` in (
 			<foreach collection="topics" item="item" index="index" separator=",">
 				#{item}
@@ -212,8 +258,101 @@
 	</select>
 
 	<select id="queryLastestLag" parameterType="map" resultType="long">
+		select ifnull((
 		select ifnull(`lag`,0) from ke_consumer_bscreen
-		where `cluster`=#{cluster} and tm=#{tday} and `group`=#{group} and `topic`=#{topic} order by `timespan` desc limit 1
+		where `cluster`=#{cluster} and tm=#{tday}
+		and `group`=#{group} and `topic`=#{topic}
+		order by `timespan` desc
+		limit 1)
+		,0)
+	</select>
+
+	<insert id="writeConsumerGroupTopics" parameterType="java.util.List">
+		replace into
+		ke_consumer_group(`cluster`,`group`,`topic`,`status`)
+		values
+		<foreach collection="list" item="item" index="index" separator=",">
+			(#{item.cluster},#{item.group},#{item.topic},#{item.status})
+		</foreach>
+	</insert>
+
+	<insert id="writeConsumerSummaryTopics" parameterType="java.util.List">
+		replace into
+		ke_consumer_group_summary(`cluster`,`group`,`topic_number`,`coordinator`,`active_topic`,`active_thread_total`)
+		values
+		<foreach collection="list" item="item" index="index" separator=",">
+			(#{item.cluster},#{item.group},#{item.topicNumbers},#{item.coordinator},#{item.activeTopic},#{item.activeThread})
+		</foreach>
+	</insert>
+
+	<delete id="cleanConsumerGroupTopic" parameterType="map">
+		delete from ke_consumer_group where `cluster`=#{cluster} and `group`=#{group}
+		<if test="topic != null and topic != ''">
+			and `topic`=#{topic}
+		</if>
+	</delete>
+
+	<delete id="cleanConsumerSummaryTopic" parameterType="map">
+		delete from ke_consumer_group_summary where `cluster`=#{cluster} and `group`=#{group}
+	</delete>
+
+	<select id="getAllConsumerGroups" parameterType="map" resultMap="cgi">
+		select * from ke_consumer_group
+		<where>
+			`cluster`=#{cluster}
+		</where>
+	</select>
+
+	<select id="getAllConsumerSummary" parameterType="map" resultMap="csi">
+		select * from ke_consumer_group_summary
+		<where>
+			`cluster`=#{cluster}
+		</where>
+	</select>
+
+	<select id="getConsumerGroupPages" parameterType="map" resultMap="cgi">
+		select * from ke_consumer_group
+		<where>
+			`cluster`=#{cluster} and `group`=#{group}
+			<if test="search != null and search != ''">
+				and `topic` like #{search}
+			</if>
+			<if test="status != null and status != ''">
+				and `status`=#{status}
+			</if>
+		</where>
+		limit #{start},#{size}
+	</select>
+
+	<select id="getConsumerSummaryPages" parameterType="map" resultMap="csi">
+		select * from ke_consumer_group_summary
+		<where>
+			`cluster`=#{cluster}
+			<if test="search != null and search != ''">
+				and `group` like #{search}
+			</if>
+		</where>
+		limit #{start},#{size}
+	</select>
+
+	<select id="countConsumerGroupPages" parameterType="map" resultType="long">
+		select count(1) from ke_consumer_group
+		<where>
+			`cluster`=#{cluster} and `group`=#{group}
+			<if test="search != null and search != ''">
+				and `topic` like #{search}
+			</if>
+		</where>
+	</select>
+
+	<select id="countConsumerSummaryPages" parameterType="map" resultType="long">
+		select count(1) from ke_consumer_group_summary
+		<where>
+			`cluster`=#{cluster}
+			<if test="search != null and search != ''">
+				and `group` like #{search}
+			</if>
+		</where>
 	</select>
 
 </mapper>

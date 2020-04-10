@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>org.smartloli.kafka.eagle</groupId>
 		<artifactId>kafka-eagle</artifactId>
-		<version>1.4.1</version>
+		<version>1.4.6</version>
 	</parent>
 	<artifactId>kafka-eagle-common</artifactId>
 
@@ -15,7 +15,7 @@
 		<repository>
 			<id>nexus</id>
 			<name>nexus</name>
-			<url>http://central.maven.org/maven2/</url>
+			<url>https://repo1.maven.org/maven2/</url>
 			<releases>
 				<enabled>true</enabled>
 			</releases>
@@ -45,7 +45,7 @@
 		<dependency>
 			<groupId>com.alibaba</groupId>
 			<artifactId>fastjson</artifactId>
-			<version>1.2.62</version>
+			<version>1.2.68</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.guava</groupId>
@@ -121,7 +121,7 @@
 		<dependency>
 			<groupId>com.alibaba</groupId>
 			<artifactId>druid</artifactId>
-			<version>1.1.16</version>
+			<version>1.1.21</version>
 		</dependency>
 		<dependency>
 			<groupId>org.quartz-scheduler</groupId>

@@ -15,17 +15,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.smartloli.kafka.eagle.api.email;
+package org.smartloli.kafka.eagle.common.protocol.topic;
+
+import org.smartloli.kafka.eagle.common.protocol.BaseProtocol;
 
 /**
- * Mail provider MailService visitor enter.
+ * Defined topic mock message schema.
  * 
  * @author smartloli.
  *
- *         Created by Jan 17, 2017
- * 
- * @see org.smartloli.kafka.eagle.api.email.MailService
+ *         Created by Dec 10, 2019
  */
-public interface MailProvider {
-	public MailService create();
+public class TopicMockMessage extends BaseProtocol {
+
+	private String topic;
+	private String message;
+
+	public String getTopic() {
+		return topic;
+	}
+
+	public void setTopic(String topic) {
+		this.topic = topic;
+	}
+
+	public String getMessage() {
+		return message;
+	}
+
+	public void setMessage(String message) {
+		this.message = message;
+	}
+
 }

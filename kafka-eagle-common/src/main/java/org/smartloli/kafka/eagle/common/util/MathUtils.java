@@ -15,22 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.smartloli.kafka.eagle.api.email;
+package org.smartloli.kafka.eagle.common.util;
 
 /**
- * Mail factory implements MailProvider service.
+ * Math util tools.
  * 
  * @author smartloli.
  *
- *         Created by Jan 17, 2017
- * 
- * @see org.smartloli.kafka.eagle.factory.MailProvider
+ *         Created by Feb 12, 2020
  */
-public class MailFactory implements MailProvider {
+public class MathUtils {
 
-	@Override
-	public MailService create() {
-		return new MailServiceImpl();
+	/** Round up by numerator and denominator. */
+	public static int ceil(int numerator, int denominator) {
+		return (denominator % numerator == 0) ? (denominator / numerator) : (denominator / numerator + 1);
 	}
 
 }

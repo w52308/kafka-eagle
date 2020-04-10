@@ -22,6 +22,8 @@ import java.util.Map;
 
 import org.smartloli.kafka.eagle.common.protocol.bscreen.BScreenBarInfo;
 import org.smartloli.kafka.eagle.common.protocol.bscreen.BScreenConsumerInfo;
+import org.smartloli.kafka.eagle.common.protocol.consumer.ConsumerGroupsInfo;
+import org.smartloli.kafka.eagle.common.protocol.consumer.ConsumerSummaryInfo;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicLogSize;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicRank;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicSqlHistory;
@@ -44,6 +46,18 @@ public interface TopicDao {
 	/** Read topic rank data. */
 	public List<TopicRank> readTopicRank(Map<String, Object> params);
 
+	/** Get clean topic state. */
+	public List<TopicRank> getCleanTopicState(Map<String, Object> params);
+
+	/** Get all clean topic list. */
+	public List<TopicRank> getCleanTopicList(Map<String, Object> params);
+
+	/** Read topic spread, skewed, leader skewed data. */
+	public TopicRank readBrokerPerformance(Map<String, Object> params);
+
+	/** Get topic total capacity. */
+	public long getTopicCapacity(Map<String, Object> params);
+
 	/**
 	 * Write statistics topic logsize data from kafka jmx & insert into table.
 	 */
@@ -57,6 +71,9 @@ public interface TopicDao {
 
 	/** Get topic producer logsize chart datasets. */
 	public List<TopicLogSize> queryTopicProducerChart(Map<String, Object> params);
+
+	/** Get topic producer logsize by alarm. */
+	public List<TopicLogSize> queryTopicProducerByAlarm(Map<String, Object> params);
 
 	/** Get producer history bar data. */
 	public List<BScreenBarInfo> queryProducerHistoryBar(Map<String, Object> params);
@@ -104,5 +121,35 @@ public interface TopicDao {
 
 	/** Get lastest lag used to alarm consumer. */
 	public long queryLastestLag(Map<String, Object> params);
+
+	/** Write consumer group topic. */
+	public int writeConsumerGroupTopics(List<ConsumerGroupsInfo> consumerGroups);
+
+	/** Write consumer group summary topic. */
+	public int writeConsumerSummaryTopics(List<ConsumerSummaryInfo> consumerSummarys);
+
+	/** Clean consumer group topics. */
+	public int cleanConsumerGroupTopic(Map<String, Object> params);
+
+	/** Clean consumer group summary topics. */
+	public int cleanConsumerSummaryTopic(Map<String, Object> params);
+
+	/** Get all consumer groups. */
+	public List<ConsumerGroupsInfo> getAllConsumerGroups(Map<String, Object> params);
+
+	/** Get all consumer groups summary. */
+	public List<ConsumerSummaryInfo> getAllConsumerSummary(Map<String, Object> params);
+
+	/** Get consumer group pages. */
+	public List<ConsumerGroupsInfo> getConsumerGroupPages(Map<String, Object> params);
+
+	/** Get consumer group summary pages. */
+	public List<ConsumerSummaryInfo> getConsumerSummaryPages(Map<String, Object> params);
+
+	/** Count consumer group pages. */
+	public long countConsumerGroupPages(Map<String, Object> params);
+
+	/** Count consumer group summary pages. */
+	public long countConsumerSummaryPages(Map<String, Object> params);
 
 }

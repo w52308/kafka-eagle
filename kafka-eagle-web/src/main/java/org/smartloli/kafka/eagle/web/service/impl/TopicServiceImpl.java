@@ -29,6 +29,7 @@ import org.smartloli.kafka.eagle.common.protocol.PartitionsInfo;
 import org.smartloli.kafka.eagle.common.protocol.bscreen.BScreenBarInfo;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicConfig;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicLogSize;
+import org.smartloli.kafka.eagle.common.protocol.topic.TopicRank;
 import org.smartloli.kafka.eagle.common.protocol.topic.TopicSqlHistory;
 import org.smartloli.kafka.eagle.common.util.CalendarUtils;
 import org.smartloli.kafka.eagle.common.util.KConstants.Kafka;
@@ -132,7 +133,7 @@ public class TopicServiceImpl implements TopicService {
 	public String getTopicProperties(String clusterAlias, String name) {
 		JSONArray topics = new JSONArray();
 		int offset = 0;
-		for (String key : Topic.KEYS) {
+		for (String key : Topic.getTopicConfigKeys()) {
 			if (name != null) {
 				JSONObject topic = new JSONObject();
 				if (key.contains(name)) {
@@ -168,7 +169,19 @@ public class TopicServiceImpl implements TopicService {
 
 	/** Get topic list. */
 	public List<PartitionsInfo> list(String clusterAlias, Map<String, Object> params) {
-		return brokerService.topicRecords(clusterAlias, params);
+		List<PartitionsInfo> topicRecords = brokerService.topicRecords(clusterAlias, params);
+		for (PartitionsInfo partitionInfo : topicRecords) {
+			Map<String, Object> spread = new HashMap<>();
+			spread.put("cluster", clusterAlias);
+			spread.put("topic", partitionInfo.getTopic());
+			spread.put("tkey", Topic.BROKER_SPREAD);
+			partitionInfo.setBrokersSpread(topicDao.readBrokerPerformance(spread) == null ? 0 : topicDao.readBrokerPerformance(spread).getTvalue());
+			spread.put("tkey", Topic.BROKER_SKEWED);
+			partitionInfo.setBrokersSkewed(topicDao.readBrokerPerformance(spread) == null ? 0 : topicDao.readBrokerPerformance(spread).getTvalue());
+			spread.put("tkey", Topic.BROKER_LEADER_SKEWED);
+			partitionInfo.setBrokersLeaderSkewed(topicDao.readBrokerPerformance(spread) == null ? 0 : topicDao.readBrokerPerformance(spread).getTvalue());
+		}
+		return topicRecords;
 	}
 
 	/** Get topic partition numbers. */
@@ -285,7 +298,7 @@ public class TopicServiceImpl implements TopicService {
 		int index = 0;
 		try {
 			index = CalendarUtils.getDiffDay(params.get("stime").toString(), params.get("etime").toString());
-		}catch (Exception e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		for (int i = index; i >= 0; i--) {
@@ -333,6 +346,16 @@ public class TopicServiceImpl implements TopicService {
 	@Override
 	public TopicSqlHistory findTopicSqlByID(Map<String, Object> params) {
 		return topicDao.findTopicSqlByID(params);
+	}
+
+	@Override
+	public int addCleanTopicData(List<TopicRank> topicRanks) {
+		return topicDao.writeTopicRank(topicRanks);
+	}
+
+	@Override
+	public List<TopicRank> getCleanTopicState(Map<String, Object> params) {
+		return topicDao.getCleanTopicState(params);
 	}
 
 }
